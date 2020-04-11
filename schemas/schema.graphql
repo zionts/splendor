@@ -1,0 +1,103 @@
+type Query{
+	"""
+	user by ID
+	"""
+	user(
+		id: ID!
+	): UserOrError!
+	me: Identity!
+}
+
+interface Error{
+	message: String
+}
+
+union UserOrError = User | NoSuchUserError
+
+type IllegalTokenError implements Error{
+	message: String!
+}
+
+type NoSuchUserError implements Error{
+	message: String!
+}
+
+type Mutation{
+	user(
+		id: ID!
+	): UserMutationOrError!
+}
+
+union UserMutationOrError = UserMutation | NoSuchUserError
+
+type UserMutation{
+	takeGemTokens(
+		selections: [StandardGemTokenSelection!]!
+		exchange: [GemTokenSelection!]
+	): GameStateUpdateOrTokenExchangeError
+}
+
+union GameStateUpdateOrTokenExchangeError = GameStateUpdate | OTODO
+
+scalar TODO
+
+type OTODO{
+	todo: TODO
+}
+
+input StandardGemTokenSelection{
+	tokenType: [STANDARD_GEM_TYPE!]!
+	number: Int!
+}
+
+input GemTokenSelection{
+	tokenType: [GEM_TYPE!]!
+	number: Int!
+}
+
+interface Identity{
+	id: ID!
+}
+
+type User implements Identity{
+	id: ID!
+}
+
+"""
+"User may take two gem tokens of the same type"
+    takeGemTokens(
+        tokens: [STANDARD_GEM_TYPE!]!
+        exchange:
+    ): GameStateUpdateOrError
+"""
+input GemSelection{
+	token_type: GEM_TYPE
+	number: Int
+}
+
+union GameStateUpdateOrError = GameStateUpdate | IllegalTokenError
+
+type GameStateUpdate{
+	updated: Boolean!
+}
+
+enum STANDARD_GEM_TYPE{
+	EMERALD
+	ONYX
+	SAPPHIRE
+	RUBY
+	DIAMOND
+}
+
+enum GEM_TYPE{
+	EMERALD
+	ONYX
+	SAPPHIRE
+	RUBY
+	GOLD
+	DIAMOND
+}
+schema{
+	query: Query,
+	mutation: Mutation
+}

@@ -1,43 +1,148 @@
 type Query{
 	"""
-	user by ID
+	player by ID
 	"""
-	user(
+	player(
 		id: ID!
-	): UserOrError!
+	): PlayerOrError!
 	me: Identity!
+	room(id:ID!): Room!
+	game(id:ID!): GameOrError!
+}
+
+union Room = Pregame | Game | RoomDoesNotExist
+
+type GameDoesNotExist implements Error{
+	message: String!
+}
+
+type Mutation{
+	game(
+		id: ID!
+	): GameMutation!
+	newLobby: Pregame!
+	room(
+		id: ID!
+	): RoomMutation!
+	joinRoom(
+		id: ID!
+		name: String!
+	): JoinRoomResult!
+}
+
+type RoomMutation{
+	startGame: GameOrError!
+}
+
+union GameOrError = Game | NotEnoughPlayers | GameDoesNotExist
+
+type NotEnoughPlayers implements Error{
+	message: String!
+}
+
+union JoinRoomResult = JoinRoomSuccess | RoomDoesNotExist | RoomIsFull
+
+type JoinRoomSuccess{
+	room: Room!
+	you: Player!
+}
+
+type RoomDoesNotExist implements Error{
+	message: String!
+}
+
+type RoomIsFull implements Error{
+	message: String!
+}
+
+type Pregame{
+	id: ID!
+	players: [Player!]!
+}
+
+type LobbyMutation{
+	newGame: Game!
+}
+
+type GameMutation{
+	start: GameBoard!
+	"""
+	Player may take two gem tokens of the same type, provided there are at least four of that type available;
+Player may take three different gem tokens of different colors;
+Player may only have up to 10 gem tokens in their possession, but may trade gem tokens to maintain limit.
+	"""
+	takeGemTokens(
+		selections: [StandardGemTokenSelection!]!
+		exchange: [GemTokenSelection!]
+	): GameBoardUpdateOrError!
+	"""
+	Player can reserve a card from the board or from the top of an unrevealed deck;
+A reservation action will provide a gold token if available.
+This card remains visible to all players until it is purchased. Only the player
+who reserved the card is able to purchase that card. Users may have up to
+three cards in their reserve at any time.
+	"""
+	reserveCardFromRevealed(
+		id: ID!
+	): GameBoardUpdateOrError!
+	"""
+	Player can reserve a card from the top of an unrevealed deck, without knowledge of
+what that card will be. Player that made the reservation is allowed to see the reserved card,
+though it is hidden to other players. A reservation action will provide a gold token if
+available.  Only the player who reserved the card is able to purchase that card.
+Users may have up to three cards in their reserve at any time.
+	"""
+	reserveCardFromUnrevealed(
+		tier: Tier!
+	): GameBoardUpdateOrError!
+	"""
+	You may purchase a revealed card. If you are using gold to purchase this card, you must specify
+which gems the gold will morph into.
+	"""
+	purchaseCardFromRevealed(
+		id: ID!
+		goldUsage: GoldUsage!
+	): GameBoardUpdateOrError!
+	"""
+	You may purchase a card from your reserve. If you are using gold to purchase
+this card, you must specify which gems the gold will morph into. Purchasing a
+card from your reserve will make available the reserve slot it was filling.
+	"""
+	purchaseCardFromReserve(
+		id: ID!
+		goldUsage: GoldUsage!
+	): GameBoardUpdateOrError!
+}
+
+input GoldUsage{
+	emerald: Int! = 0
+	onyx: Int! = 0
+	sapphire: Int! = 0
+	ruby: Int! = 0
+	diamond: Int! = 0
+}
+
+enum Tier{
+	TIER_ONE
+	TIER_TWO
+	TIER_THREE
 }
 
 interface Error{
 	message: String
 }
 
-union UserOrError = User | NoSuchUserError
+union PlayerOrError = Player | NoSuchPlayerError
 
 type IllegalTokenError implements Error{
 	message: String!
 }
 
-type NoSuchUserError implements Error{
+type NoSuchPlayerError implements Error{
 	message: String!
 }
 
-type Mutation{
-	user(
-		id: ID!
-	): UserMutationOrError!
-}
-
-union UserMutationOrError = UserMutation | NoSuchUserError
-
-type UserMutation{
-	takeGemTokens(
-		selections: [StandardGemTokenSelection!]!
-		exchange: [GemTokenSelection!]
-	): GameStateUpdateOrTokenExchangeError
-}
-
-union GameStateUpdateOrTokenExchangeError = GameStateUpdate | OTODO
+union GameBoardUpdateOrTokenExchangeError = GameBoardUpdate | OTODO
 
 scalar TODO
 
@@ -59,26 +164,113 @@ interface Identity{
 	id: ID!
 }
 
-type User implements Identity{
+type Player implements Identity{
 	id: ID!
+	name: String!
 }
 
-"""
-"User may take two gem tokens of the same type"
-    takeGemTokens(
-        tokens: [STANDARD_GEM_TYPE!]!
-        exchange:
-    ): GameStateUpdateOrError
-"""
-input GemSelection{
-	token_type: GEM_TYPE
-	number: Int
+input StandardGemSelection{
+	tokenType: STANDARD_GEM_TYPE!
+	number: Int!
 }
 
-union GameStateUpdateOrError = GameStateUpdate | IllegalTokenError
+type GemSelection{
+	tokenType: GEM_TYPE!
+}
 
-type GameStateUpdate{
-	updated: Boolean!
+type ErrorTODO implements Error{
+	message: String!
+}
+
+union GameBoardUpdateOrError = GameBoardUpdate | ErrorTODO
+
+type GameBoardUpdate{
+	state: GameBoard
+}
+
+type GameBoard{
+	availableTierOneCards: [Card!]!
+	availableTierTwoCards: [Card!]!
+	availableTierThreeCards: [Card!]!
+	playerCards: [Card!]!
+	playerCardsReserve: [Card!]!
+	playerGemTokens: [GemSelection!]!
+	playerNobles: [Noble!]
+	availableNobles: [Noble!]!
+	playerScores: [PlayerScore!]!
+	elapsedTurns: Int!
+	winner: Player
+}
+
+type PlayerScore{
+	player: Player!
+	score: Int!
+}
+
+union NobleLocation = PlayerHand | Available
+
+union GemTokenLocation = PlayerHand | Available
+
+type Available{
+	nothing: Nothing!
+}
+
+type Deck{
+	position: Int!
+}
+
+union CardLocation = PlayerHand | PlayerReserve | Available | Deck
+
+type PlayerReserve{
+	player: Player!
+}
+
+type PlayerHand{
+	player: Player!
+	nothing: Nothing!
+}
+
+scalar Nothing
+
+"""
+Properties of a game that remain static throughout duration of game
+"""
+type Game{
+	players: [Player!]!
+	tierOneDeck: [TierOneCard!]!
+	tierTwoDeck: [TierTwoCard!]!
+	tierThreeDeck: [TierThreeCard!]!
+	nobles: [Noble!]!
+	currentBoard: GameBoard!
+}
+
+type Noble{
+	permanentGemRequirement: [GemSelection!]!
+	victoryPoints: Int!
+}
+
+interface Card{
+	cost: [GemSelection!]!
+	gemType: STANDARD_GEM_TYPE!
+	victoryPoints: Int!
+}
+
+type TierOneCard implements Card{
+	cost: [GemSelection!]!
+	gemType: STANDARD_GEM_TYPE!
+	victoryPoints: Int!
+}
+
+type TierTwoCard implements Card{
+	cost: [GemSelection!]!
+	gemType: STANDARD_GEM_TYPE!
+	victoryPoints: Int!
+}
+
+type TierThreeCard implements Card{
+	cost: [GemSelection!]!
+	gemType: STANDARD_GEM_TYPE!
+	victoryPoints: Int!
 }
 
 enum STANDARD_GEM_TYPE{
